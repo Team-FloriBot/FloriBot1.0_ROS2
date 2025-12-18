@@ -14,20 +14,18 @@ WheelSpeedSet KinematicsCalculator::calculateWheelSpeeds(double linear_x, double
     double vel_left = linear_x - (angular_z * wheel_sep_ / 2.0);
     double vel_right = linear_x + (angular_z * wheel_sep_ / 2.0);
 
-    double rad_s_left = vel_left / wheel_rad_;
+    double rad_s_left = vel_left / wheel_rad_;  // Winkelgeschwindigkeit
     double rad_s_right = vel_right / wheel_rad_;
 
     // For skid steer, Front and Rear on same side behave identically
-    return {rad_s_left, rad_s_right, rad_s_left, rad_s_right};
+    return {rad_s_left, rad_s_right};
 }
 
 RobotTwist KinematicsCalculator::calculateRobotTwist(const WheelSpeedSet& speeds) {
     // Average left and right side speeds
-    double rad_s_left = (speeds.fl + speeds.rl) / 2.0;
-    double rad_s_right = (speeds.fr + speeds.rr) / 2.0;
 
-    double vel_left = rad_s_left * wheel_rad_;
-    double vel_right = rad_s_right * wheel_rad_;
+    double vel_left = speeds.left * wheel_rad_;   // Geschwindigkeit(Translation)
+    double vel_right = speeds.right * wheel_rad_;
 
     RobotTwist twist;
     twist.linear_x = (vel_left + vel_right) / 2.0;

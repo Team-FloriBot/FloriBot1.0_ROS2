@@ -39,10 +39,8 @@ void KinematicsNode::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr m
 
     // 2. Publish
     base::msg::WheelVelocities out_msg;
-    out_msg.front_left = speeds.fl;
-    out_msg.front_right = speeds.fr;
-    out_msg.rear_left = speeds.rl;
-    out_msg.rear_right = speeds.rr;
+    out_msg.left = speeds.left;
+    out_msg.right = speeds.right;
     
     pub_wheel_cmd_->publish(out_msg);
 }
@@ -54,10 +52,8 @@ void KinematicsNode::wheelStateCallback(const base::msg::WheelVelocities::Shared
 
     // 1. Convert wheel speeds to robot twist
     WheelSpeedSet measured;
-    measured.fl = msg->front_left;
-    measured.fr = msg->front_right;
-    measured.rl = msg->rear_left;
-    measured.rr = msg->rear_right;
+    measured.left = msg->left;
+    measured.right = msg->right;
 
     RobotTwist twist = kinematics_->calculateRobotTwist(measured);
 

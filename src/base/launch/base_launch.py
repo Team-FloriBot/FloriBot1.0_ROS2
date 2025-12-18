@@ -20,7 +20,7 @@ def generate_launch_description():
     )
 
     # 2. Wheel Controllers (4 instances)
-    wheels = ['fl', 'fr', 'rl', 'rr']
+    wheels = ['left', 'right']
     wheel_nodes = []
 
     for wheel_id in wheels:

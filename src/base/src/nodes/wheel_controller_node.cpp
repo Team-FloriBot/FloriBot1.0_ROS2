@@ -4,7 +4,7 @@ namespace base {
 
 WheelControllerNode::WheelControllerNode() : Node("wheel_controller_node") {
     // Declare Params
-    this->declare_parameter("wheel_id", "fl"); // fl, fr, rl, rr
+    this->declare_parameter("wheel_id", "left"); // fl, fr, rl, rr
     this->declare_parameter("kp", 1.0);
     this->declare_parameter("ki", 0.0);
     this->declare_parameter("kd", 0.0);
@@ -36,10 +36,8 @@ WheelControllerNode::WheelControllerNode() : Node("wheel_controller_node") {
 }
 
 void WheelControllerNode::commandCallback(const base::msg::WheelVelocities::SharedPtr msg) {
-    if (wheel_id_ == "fl") setpoint_ = msg->front_left;
-    else if (wheel_id_ == "fr") setpoint_ = msg->front_right;
-    else if (wheel_id_ == "rl") setpoint_ = msg->rear_left;
-    else if (wheel_id_ == "rr") setpoint_ = msg->rear_right;
+    if (wheel_id_ == "left") setpoint_ = msg->left;
+    else if (wheel_id_ == "right") setpoint_ = msg->right;
 }
 
 void WheelControllerNode::controlLoop() {

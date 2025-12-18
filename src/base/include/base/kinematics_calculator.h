@@ -4,10 +4,8 @@
 namespace base {
 
 struct WheelSpeedSet {
-    double fl;
-    double fr;
-    double rl;
-    double rr;
+    double left;
+    double right;
 };
 
 struct RobotTwist {

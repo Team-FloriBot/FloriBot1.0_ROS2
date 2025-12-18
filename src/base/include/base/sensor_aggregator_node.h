@@ -13,19 +13,15 @@ public:
 
 private:
     // Callbacks für die vier individuellen WheelControllerStates
-    void flStateCallback(const base::msg::WheelControllerState::SharedPtr msg);
-    void frStateCallback(const base::msg::WheelControllerState::SharedPtr msg);
-    void rlStateCallback(const base::msg::WheelControllerState::SharedPtr msg);
-    void rrStateCallback(const base::msg::WheelControllerState::SharedPtr msg);
+    void leftStateCallback(const base::msg::WheelControllerState::SharedPtr msg);
+    void rightStateCallback(const base::msg::WheelControllerState::SharedPtr msg);
 
     // Haupt-Timer-Funktion zur Aggregation und Veröffentlichung
     void publishAggregatedStates();
 
     // Abonnements
-    rclcpp::Subscription<base::msg::WheelControllerState>::SharedPtr sub_fl_;
-    rclcpp::Subscription<base::msg::WheelControllerState>::SharedPtr sub_fr_;
-    rclcpp::Subscription<base::msg::WheelControllerState>::SharedPtr sub_rl_;
-    rclcpp::Subscription<base::msg::WheelControllerState>::SharedPtr sub_rr_;
+    rclcpp::Subscription<base::msg::WheelControllerState>::SharedPtr sub_left_;
+    rclcpp::Subscription<base::msg::WheelControllerState>::SharedPtr sub_right_;
 
     // Publisher
     rclcpp::Publisher<base::msg::WheelVelocities>::SharedPtr pub_wheel_states_;
