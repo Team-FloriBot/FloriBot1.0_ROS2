@@ -80,6 +80,12 @@ ament_target_dependencies(sensor_aggregator_node rclcpp)
 rosidl_get_typesupport_target(cpp_typesupport_target_aggregator "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 target_link_libraries(sensor_aggregator_node "${cpp_typesupport_target_aggregator}")
 
+# --- Sabertooth Node ---
+add_executable(sabertooth_node src/nodes/sabertooth_node.cpp)
+ament_target_dependencies(sabertooth_node rclcpp)
+rosidl_get_typesupport_target(cpp_typesupport_target_saber "${PROJECT_NAME}" "rosidl_typesupport_cpp")
+target_link_libraries(sabertooth_node "${cpp_typesupport_target_saber}")
+
 # 4. Install (Install-Abschnitt aktualisieren)
 install(TARGETS base_math_lib kinematics_node wheel_controller_node sensor_aggregator_node
   EXPORT export_${PROJECT_NAME}

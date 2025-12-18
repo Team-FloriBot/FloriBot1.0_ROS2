@@ -43,6 +43,15 @@ def generate_launch_description():
         name='sensor_aggregator_node',
         output='screen'
     )
+    
+    # 4. Sabertooth Node
+    sabertooth_node = Node(
+        package='base',
+        executable='sabertooth_node',
+        name='sabertooth_node',
+        parameters=[{'port': '/dev/ttyS1'}]
+        output='screen'
+    )
 
     return LaunchDescription([
         kinematics_node,
