@@ -28,13 +28,8 @@ def generate_launch_description():
         name='hardware_node',
         output='screen',
         # Kombiniere YAML-Datei mit Overrides
-        parameters=[
-            default_config_path,
-            {'serial_port': LaunchConfiguration('serial_port')}
-        ],
-        remappings=[
-            ('/wheel_commands', '/cmd_vel_wheels'), # Beispiel für Remapping
-        ]
+        parameters=[hardware_config]
+        
     )
 
 
