@@ -8,7 +8,7 @@ class SabertoothNode : public rclcpp::Node {
 public:
     SabertoothNode() : Node("sabertooth_node") {
         // Parameter (Standardwerte für PC-USB-Adapter)
-        this->declare_parameter("port", "/dev/ttyUSB0");
+        this->declare_parameter("port", "/dev/ttyS1");
         this->declare_parameter("baud", 9600);
         this->declare_parameter("address", 128);
 
