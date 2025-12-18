@@ -87,7 +87,7 @@ rosidl_get_typesupport_target(cpp_typesupport_target_saber "${PROJECT_NAME}" "ro
 target_link_libraries(sabertooth_node "${cpp_typesupport_target_saber}")
 
 # 4. Install (Install-Abschnitt aktualisieren)
-install(TARGETS base_math_lib kinematics_node wheel_controller_node sensor_aggregator_node
+install(TARGETS base_math_lib kinematics_node wheel_controller_node sensor_aggregator_node sabertooth_node
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
