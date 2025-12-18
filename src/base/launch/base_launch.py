@@ -23,7 +23,7 @@ def generate_launch_description():
 
     # 2. Hardware_Node
     hardware_node = Node(
-        package='base_package',
+        package='base',
         executable='hardware_node',
         name='hardware_node',
         output='screen',
