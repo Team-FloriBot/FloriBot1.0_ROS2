@@ -1,8 +1,8 @@
 hardware_node:
   ros__parameters:
     serial_port: "/dev/ttyS1"
-    left_enc_serial: 123456
-    right_enc_serial: 654321
+    left_enc_serial: 101902
+    right_enc_serial: 102191
     wheel_radius: 0.05
     ticks_per_rev: 1440.0
     # PID Parameter
