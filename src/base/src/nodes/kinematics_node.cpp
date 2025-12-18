@@ -22,8 +22,8 @@ KinematicsNode::KinematicsNode() : Node("kinematics_node") {
     sub_cmd_vel_ = this->create_subscription<geometry_msgs::msg::Twist>(
         "/cmd_vel", 10, std::bind(&KinematicsNode::cmdVelCallback, this, _1));
 
-    sub_wheel_states_ = this->create_subscription<base::msg::WheelVelocities>(
-        "/wheel_states", 10, std::bind(&KinematicsNode::wheelStateCallback, this, _1));
+    sub_wheel_states_ = this->create_subscription<sensor_msgs::msg::JointState>(
+    "/wheel_states", 10, std::bind(&KinematicsNode::wheelStateCallback, this, _1));
 
     pub_wheel_cmd_ = this->create_publisher<base::msg::WheelVelocities>("/wheel_commands", 10);
     pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
@@ -45,15 +45,19 @@ void KinematicsNode::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr m
     pub_wheel_cmd_->publish(out_msg);
 }
 
-void KinematicsNode::wheelStateCallback(const base::msg::WheelVelocities::SharedPtr msg) {
+void KinematicsNode::wheelStateCallback(const sensor_msgs::msg::JointState::SharedPtr msg) {
     rclcpp::Time current_time = this->now();
     double dt = (current_time - last_odom_time_).seconds();
-    if (dt <= 0) return;
+    
+    // Safety Checks
+    if (dt <= 0 || msg->velocity.size() < 2) return;
 
-    // 1. Convert wheel speeds to robot twist
+    // 1. Convert JointState (rad/s) to robot twist
     WheelSpeedSet measured;
-    measured.left = msg->left;
-    measured.right = msg->right;
+    
+    // Annahme: Index 0 = links, Index 1 = rechts (wie im hardware_node definiert)
+    measured.left = msg->velocity[0];
+    measured.right = msg->velocity[1];
 
     RobotTwist twist = kinematics_->calculateRobotTwist(measured);
 

@@ -7,6 +7,7 @@
 #include "tf2_ros/transform_broadcaster.h"
 #include "base/msg/wheel_velocities.hpp"
 #include "base/kinematics_calculator.h"
+#include "sensor_msgs/msg/joint_state.hpp"
 
 namespace base {
 
@@ -17,14 +18,14 @@ public:
 private:
     // Callbacks
     void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
-    void wheelStateCallback(const base::msg::WheelVelocities::SharedPtr msg);
+    void wheelStateCallback(const sensor_msgs::msg::JointState::SharedPtr msg);
 
     // Helpers
     void publishOdometry(const RobotTwist& twist, double dt);
 
     // ROS Handles
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_cmd_vel_;
-    rclcpp::Subscription<base::msg::WheelVelocities>::SharedPtr sub_wheel_states_;
+    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr sub_wheel_states_;
     
     rclcpp::Publisher<base::msg::WheelVelocities>::SharedPtr pub_wheel_cmd_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_;
