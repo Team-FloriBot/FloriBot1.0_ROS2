@@ -49,13 +49,14 @@ def generate_launch_description():
         package='base',
         executable='sabertooth_node',
         name='sabertooth_node',
-        parameters=[{'port': '/dev/ttyS1'}]
+        parameters=[{'port': '/dev/ttyS1'}],
         output='screen'
     )
 
     return LaunchDescription([
         kinematics_node,
         *wheel_nodes,
-        aggregator_node
+        aggregator_node,
+        sabertooth_node
     ])
 
