@@ -10,12 +10,15 @@ HardwareNode::HardwareNode() : Node("hardware_node") {
     motor_driver_ = std::make_unique<SSC32Driver>(this->get_parameter("serial_port").as_string(), 115200); // richtige Baudrate????
     try {
     // Diese Zeilen blockieren nun bis zu 10s, bis die Hardware wirklich da ist
-      enc_left_ = std::make_unique<PhidgetEncoderWrapper>(101902);
-      enc_right_ = std::make_unique<PhidgetEncoderWrapper>(102191);
+      const int left_sn  = this->get_parameter("left_enc_serial").as_int();
+      const int right_sn = this->get_parameter("right_enc_serial").as_int();
+      enc_left_  = std::make_unique<PhidgetEncoderWrapper>(left_sn);
+      enc_right_ = std::make_unique<PhidgetEncoderWrapper>(right_sn);
       RCLCPP_INFO(this->get_logger(), "Beide Encoder erfolgreich initialisiert.");
-}   catch (const std::exception& e) {
+    }   
+    catch (const std::exception& e) {
       RCLCPP_ERROR(this->get_logger(), "Initialisierungsfehler: %s", e.what());
-}
+    }
     
     pid_left_ = std::make_unique<PIDController>(10.0, 0.5, 0.1);
     pid_right_ = std::make_unique<PIDController>(10.0, 0.5, 0.1);

@@ -1,87 +1,162 @@
 #include "base/diff_drive_lib.hpp"
+
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
+
 #include <stdexcept>
-#include <iostream> // Wichtig für std::cout
+#include <iostream>
+#include <cerrno>
+#include <cstring>
 
-// --- PID Implementation ---
-PIDController::PIDController(double kp, double ki, double kd) : kp_(kp), ki_(ki), kd_(kd) {}
+// ======================================================
+// PID Controller
+// ======================================================
 
-double PIDController::compute(double setpoint, double measured, double dt) {
-    double error = setpoint - measured;
+PIDController::PIDController(double kp, double ki, double kd)
+: kp_(kp), ki_(ki), kd_(kd) {}
+
+double PIDController::compute(double setpoint, double measured, double dt)
+{
+    const double error = setpoint - measured;
     integral_ += error * dt;
-    double derivative = (error - last_error_) / dt;
+
+    const double derivative = (dt > 0.0)
+        ? (error - last_error_) / dt
+        : 0.0;
+
     last_error_ = error;
-    return (kp_ * error) + (ki_ * integral_) + (kd_ * derivative);
+
+    return kp_ * error + ki_ * integral_ + kd_ * derivative;
 }
 
-// --- SSC32 Implementation ---
-SSC32Driver::SSC32Driver(const std::string& port, int baudrate) {
-    fd_ = open(port.c_str(), O_RDWR | O_NOCTTY);
-    if (fd_ < 0) throw std::runtime_error("Fehler beim Öffnen des seriellen Ports");
-    struct termios tty;
-    tcgetattr(fd_, &tty);
-    cfsetospeed(&tty, B115200); // Vereinfacht für dieses Beispiel
+// ======================================================
+// SSC-32 Driver
+// ======================================================
+
+SSC32Driver::SSC32Driver(const std::string& port, int baudrate)
+: fd_(-1)
+{
+    fd_ = open(port.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
+    if (fd_ < 0) {
+        throw std::runtime_error(
+            "SSC32: Failed to open serial port " + port + ": " +
+            std::strerror(errno)
+        );
+    }
+
+    struct termios tty {};
+    if (tcgetattr(fd_, &tty) != 0) {
+        close(fd_);
+        throw std::runtime_error("SSC32: tcgetattr failed");
+    }
+
+    // Baudrate (aktuell nur 115200 unterstützt)
+    cfsetospeed(&tty, B115200);
+    cfsetispeed(&tty, B115200);
+
     tty.c_cflag |= (CLOCAL | CREAD);
-    tcsetattr(fd_, TCSANOW, &tty);
-}
+    tty.c_cflag &= ~CSIZE;
+    tty.c_cflag |= CS8;        // 8 Datenbits
+    tty.c_cflag &= ~PARENB;    // keine Parität
+    tty.c_cflag &= ~CSTOPB;    // 1 Stopbit
+    tty.c_cflag &= ~CRTSCTS;   // kein HW-Flowcontrol
 
-SSC32Driver::~SSC32Driver() { if (fd_ >= 0) close(fd_); }
+    tty.c_lflag = 0;
+    tty.c_oflag = 0;
+    tty.c_iflag = 0;
 
-void SSC32Driver::send_commands(int pwm_left, int pwm_right) {
-    // SSC-32 Tipp: Das Anhängen von 'T10' sagt dem Board, 
-    // dass die Bewegung in 10ms abgeschlossen sein soll (passend zu deinem 100Hz Loop)
-    std::string cmd = "#0P" + std::to_string(pwm_left) + 
-                      "#1P" + std::to_string(pwm_right) + "T10\r";
-    
-    ssize_t bytes_written = write(fd_, cmd.c_str(), cmd.length());
-    
-    if (bytes_written < 0) {
-        // Hier könnte man einen ROS_ERROR-Logger einbinden, 
-        // aber wir bleiben in der Library ROS-unabhängig
-        perror("SSC32 Serial Write Error");
+    tty.c_cc[VMIN]  = 0;
+    tty.c_cc[VTIME] = 5; // 0.5s Timeout
+
+    if (tcsetattr(fd_, TCSANOW, &tty) != 0) {
+        close(fd_);
+        throw std::runtime_error("SSC32: tcsetattr failed");
     }
 }
 
-// --- Phidgets Implementation ---
-// Interner Callback für die Library
-int CCONV AttachHandler(CPhidgetHandle phid, void *userptr) {
-    int serial_number;
-    CPhidget_getSerialNumber(phid, &serial_number);
-    // Wir nutzen hier std::cout, da ROS_INFO in der Library nicht verfügbar ist
-    std::cout << "[PhidgetLib] Hardware Attached: Serial " << serial_number <<  std::endl;
+SSC32Driver::~SSC32Driver()
+{
+    if (fd_ >= 0) {
+        close(fd_);
+        fd_ = -1;
+    }
+}
+
+void SSC32Driver::send_commands(int pwm_left, int pwm_right)
+{
+    if (fd_ < 0) return;
+
+    // Begrenzen (Sicherheitsnetz)
+    pwm_left  = std::clamp(pwm_left,  1000, 2000);
+    pwm_right = std::clamp(pwm_right, 1000, 2000);
+
+    // T10 => Bewegung in 10ms (passend zu 100Hz Loop)
+    const std::string cmd =
+        "#0P" + std::to_string(pwm_left) +
+        "#1P" + std::to_string(pwm_right) +
+        "T10\r";
+
+    const ssize_t written = write(fd_, cmd.c_str(), cmd.size());
+    if (written < 0) {
+        std::cerr << "[SSC32] Serial write error: "
+                  << std::strerror(errno) << std::endl;
+    }
+}
+
+// ======================================================
+// Phidget Encoder
+// ======================================================
+
+// Attach Callback (Library-intern)
+int CCONV AttachHandler(CPhidgetHandle phid, void*)
+{
+    int serial = -1;
+    CPhidget_getSerialNumber(phid, &serial);
+    std::cout << "[Phidget] Encoder attached (SN=" << serial << ")" << std::endl;
     return 0;
 }
 
 PhidgetEncoderWrapper::PhidgetEncoderWrapper(int expected_serial)
 : handle_(nullptr)
 {
-    int result = 0;
     CPhidgetEncoderHandle h = nullptr;
+    int result = 0;
 
-    CPhidgetEncoder_create(&h);
+    // Create
+    result = CPhidgetEncoder_create(&h);
+    if (result != 0 || !h) {
+        throw std::runtime_error("Phidget: Encoder_create failed");
+    }
 
+    // Attach callback (wie ROS1)
     CPhidget_set_OnAttach_Handler(
         (CPhidgetHandle)h,
         AttachHandler,
         nullptr
     );
 
-    // WICHTIG: wie im ROS1-Code
-    CPhidget_open((CPhidgetHandle)h, -1);
+    // WICHTIG: exakt wie im ROS1-Code
+    result = CPhidget_open((CPhidgetHandle)h, -1);
+    if (result != 0) {
+        CPhidget_delete((CPhidgetHandle)h);
+        throw std::runtime_error("Phidget: open(-1) failed");
+    }
 
+    // Warten auf Hardware
     result = CPhidget_waitForAttachment((CPhidgetHandle)h, 10000);
     if (result != 0) {
-        const char* err;
+        const char* err = nullptr;
         CPhidget_getErrorDescription(result, &err);
         CPhidget_close((CPhidgetHandle)h);
         CPhidget_delete((CPhidgetHandle)h);
         throw std::runtime_error(
-            "Phidget attach failed: " + std::string(err)
+            "Phidget attach timeout: " +
+            std::string(err ? err : "unknown error")
         );
     }
 
+    // Seriennummer prüfen
     int actual_serial = -1;
     CPhidget_getSerialNumber((CPhidgetHandle)h, &actual_serial);
 
@@ -89,18 +164,23 @@ PhidgetEncoderWrapper::PhidgetEncoderWrapper(int expected_serial)
         CPhidget_close((CPhidgetHandle)h);
         CPhidget_delete((CPhidgetHandle)h);
         throw std::runtime_error(
-            "Wrong Phidget attached. Expected "
-            + std::to_string(expected_serial)
-            + " got "
-            + std::to_string(actual_serial)
+            "Phidget wrong serial. Expected " +
+            std::to_string(expected_serial) +
+            ", got " +
+            std::to_string(actual_serial)
         );
     }
+
+    // Initialer Read (Sanity)
+    int pos = 0;
+    CPhidgetEncoder_getPosition(h, 0, &pos);
+    last_known_pos_ = pos;
 
     handle_ = h;
 }
 
-
-PhidgetEncoderWrapper::~PhidgetEncoderWrapper() {
+PhidgetEncoderWrapper::~PhidgetEncoderWrapper()
+{
     if (handle_) {
         CPhidget_close((CPhidgetHandle)handle_);
         CPhidget_delete((CPhidgetHandle)handle_);
@@ -108,12 +188,16 @@ PhidgetEncoderWrapper::~PhidgetEncoderWrapper() {
     }
 }
 
-int PhidgetEncoderWrapper::get_position() {
+int PhidgetEncoderWrapper::get_position()
+{
+    if (!handle_) return last_known_pos_;
+
     int pos = 0;
-    // Index 0 ist der Standard-Encoder-Kanal bei PhidgetEncoder HighSpeed
-    if (CPhidgetEncoder_getPosition(handle_, 0, &pos) != 0) {
-        return last_known_pos_; 
+    const int r = CPhidgetEncoder_getPosition(handle_, 0, &pos);
+    if (r != 0) {
+        return last_known_pos_;
     }
+
     last_known_pos_ = pos;
     return pos;
 }
