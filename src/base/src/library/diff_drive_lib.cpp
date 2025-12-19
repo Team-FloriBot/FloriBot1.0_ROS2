@@ -3,6 +3,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <stdexcept>
+#include <iostream> // Wichtig für std::cout
 
 // --- PID Implementation ---
 PIDController::PIDController(double kp, double ki, double kd) : kp_(kp), ki_(ki), kd_(kd) {}
@@ -49,6 +50,10 @@ PhidgetEncoderWrapper::PhidgetEncoderWrapper(int serial_number) {
     CPhidget_open((CPhidgetHandle)handle_, serial_number);
     if(CPhidget_waitForAttachment((CPhidgetHandle)handle_, 2000) != 0) {
         throw std::runtime_error("Phidget Encoder nicht gefunden: " + std::to_string(serial_number));
+    }
+    else {
+        std::cout << "[PhidgetLib] Encoder erfolgreich verbunden. Seriennummer: " 
+                  << serial_number << std::endl;
     }
 }
 
