@@ -45,25 +45,49 @@ void SSC32Driver::send_commands(int pwm_left, int pwm_right) {
 }
 
 // --- Phidgets Implementation ---
-PhidgetEncoderWrapper::PhidgetEncoderWrapper(int serial_number) {
+// Interner Callback für die Library
+int CCONV AttachHandler(CPhidgetHandle phid, void *userptr) {
+    int serial_number;
+    CPhidget_getSerialNumber(phid, &serial_number);
+    // Wir nutzen hier std::cout, da ROS_INFO in der Library nicht verfügbar ist
+    std::cout << "[PhidgetLib] Hardware Attached: Serial " << serial_number << std::endl;
+    return 0;
+}
+
+PhidgetEncoderWrapper::PhidgetEncoderWrapper(int serial_number) : handle_(nullptr) {
     CPhidgetEncoder_create(&handle_);
+
+    // Setze den Attach Handler (wie im Original)
+    CPhidget_set_OnAttach_Handler((CPhidgetHandle)handle_, AttachHandler, NULL);
+
+    // Öffne das Gerät mit der spezifischen Seriennummer
     CPhidget_open((CPhidgetHandle)handle_, serial_number);
-    if(CPhidget_waitForAttachment((CPhidgetHandle)handle_, 2000) != 0) {
-        throw std::runtime_error("Phidget Encoder nicht gefunden: " + std::to_string(serial_number));
-    }
-    else {
-        std::cout << "[PhidgetLib] Encoder erfolgreich verbunden. Seriennummer: " 
-                  << serial_number << std::endl;
+
+    // Warte auf Verbindung (10 Sekunden wie im Original)
+    int result;
+    if ((result = CPhidget_waitForAttachment((CPhidgetHandle)handle_, 10000)) != 0) {
+        const char *err_ptr;
+        CPhidget_getErrorDescription(result, &err_ptr);
+        std::string err_msg(err_ptr);
+        CPhidget_delete((CPhidgetHandle)handle_);
+        throw std::runtime_error("Phidget (SN " + std::to_string(serial_number) + ") Fehler: " + err_msg);
     }
 }
 
 PhidgetEncoderWrapper::~PhidgetEncoderWrapper() {
-    CPhidget_close((CPhidgetHandle)handle_);
-    CPhidget_delete((CPhidgetHandle)handle_);
+    if (handle_) {
+        CPhidget_close((CPhidgetHandle)handle_);
+        CPhidget_delete((CPhidgetHandle)handle_);
+    }
 }
 
 int PhidgetEncoderWrapper::get_position() {
-    int pos;
-    CPhidgetEncoder_getPosition(handle_, 0, &pos);
+    int pos = 0;
+    // Index 0 ist der Standard-Encoder-Kanal bei PhidgetEncoder HighSpeed
+    if (CPhidgetEncoder_getPosition(handle_, 0, &pos) != 0) {
+        return last_known_pos_; 
+    }
+    last_known_pos_ = pos;
     return pos;
 }
+

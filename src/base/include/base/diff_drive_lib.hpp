@@ -31,6 +31,7 @@ public:
     int get_position();
 private:
     CPhidgetEncoderHandle handle_;
+    int last_known_pos_ = 0;
 };
 
 #endif
