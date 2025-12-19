@@ -88,8 +88,12 @@ void SSC32Driver::send_commands(int pwm_left, int pwm_right)
     if (fd_ < 0) return;
 
     // Begrenzen (Sicherheitsnetz)
-    pwm_left  = std::clamp(pwm_left,  1000, 2000);
-    pwm_right = std::clamp(pwm_right, 1000, 2000);
+    if (pwm_left < 1000)  pwm_left = 1000;
+    if (pwm_left > 2000)  pwm_left = 2000;
+
+    if (pwm_right < 1000) pwm_right = 1000;
+    if (pwm_right > 2000) pwm_right = 2000;
+
 
     // T10 => Bewegung in 10ms (passend zu 100Hz Loop)
     const std::string cmd =
