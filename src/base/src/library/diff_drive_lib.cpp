@@ -50,34 +50,61 @@ int CCONV AttachHandler(CPhidgetHandle phid, void *userptr) {
     int serial_number;
     CPhidget_getSerialNumber(phid, &serial_number);
     // Wir nutzen hier std::cout, da ROS_INFO in der Library nicht verfügbar ist
-    std::cout << "[PhidgetLib] Hardware Attached: Serial " << serial_number << std::endl;
+    std::cout << "[PhidgetLib] Hardware Attached: Serial " << serial_number <<  std::endl;
     return 0;
 }
 
-PhidgetEncoderWrapper::PhidgetEncoderWrapper(int serial_number) : handle_(nullptr) {
-    CPhidgetEncoder_create(&handle_);
+PhidgetEncoderWrapper::PhidgetEncoderWrapper(int expected_serial)
+: handle_(nullptr)
+{
+    int result = 0;
+    CPhidgetEncoderHandle h = nullptr;
 
-    // Setze den Attach Handler (wie im Original)
-    CPhidget_set_OnAttach_Handler((CPhidgetHandle)handle_, AttachHandler, NULL);
+    CPhidgetEncoder_create(&h);
 
-    // Öffne das Gerät mit der spezifischen Seriennummer
-    CPhidget_open((CPhidgetHandle)handle_, serial_number);
+    CPhidget_set_OnAttach_Handler(
+        (CPhidgetHandle)h,
+        AttachHandler,
+        nullptr
+    );
 
-    // Warte auf Verbindung (10 Sekunden wie im Original)
-    int result;
-    if ((result = CPhidget_waitForAttachment((CPhidgetHandle)handle_, 10000)) != 0) {
-        const char *err_ptr;
-        CPhidget_getErrorDescription(result, &err_ptr);
-        std::string err_msg(err_ptr);
-        CPhidget_delete((CPhidgetHandle)handle_);
-        throw std::runtime_error("Phidget (SN " + std::to_string(serial_number) + ") Fehler: " + err_msg);
+    // WICHTIG: wie im ROS1-Code
+    CPhidget_open((CPhidgetHandle)h, -1);
+
+    result = CPhidget_waitForAttachment((CPhidgetHandle)h, 10000);
+    if (result != 0) {
+        const char* err;
+        CPhidget_getErrorDescription(result, &err);
+        CPhidget_close((CPhidgetHandle)h);
+        CPhidget_delete((CPhidgetHandle)h);
+        throw std::runtime_error(
+            "Phidget attach failed: " + std::string(err)
+        );
     }
+
+    int actual_serial = -1;
+    CPhidget_getSerialNumber((CPhidgetHandle)h, &actual_serial);
+
+    if (actual_serial != expected_serial) {
+        CPhidget_close((CPhidgetHandle)h);
+        CPhidget_delete((CPhidgetHandle)h);
+        throw std::runtime_error(
+            "Wrong Phidget attached. Expected "
+            + std::to_string(expected_serial)
+            + " got "
+            + std::to_string(actual_serial)
+        );
+    }
+
+    handle_ = h;
 }
+
 
 PhidgetEncoderWrapper::~PhidgetEncoderWrapper() {
     if (handle_) {
         CPhidget_close((CPhidgetHandle)handle_);
         CPhidget_delete((CPhidgetHandle)handle_);
+        handle_ = nullptr;
     }
 }
 
