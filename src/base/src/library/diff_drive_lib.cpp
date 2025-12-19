@@ -29,8 +29,18 @@ SSC32Driver::SSC32Driver(const std::string& port, int baudrate) {
 SSC32Driver::~SSC32Driver() { if (fd_ >= 0) close(fd_); }
 
 void SSC32Driver::send_commands(int pwm_left, int pwm_right) {
-    std::string cmd = "#0P" + std::to_string(pwm_left) + "#1P" + std::to_string(pwm_right) + "\r";
-    write(fd_, cmd.c_str(), cmd.length());
+    // SSC-32 Tipp: Das Anhängen von 'T10' sagt dem Board, 
+    // dass die Bewegung in 10ms abgeschlossen sein soll (passend zu deinem 100Hz Loop)
+    std::string cmd = "#0P" + std::to_string(pwm_left) + 
+                      "#1P" + std::to_string(pwm_right) + "T10\r";
+    
+    ssize_t bytes_written = write(fd_, cmd.c_str(), cmd.length());
+    
+    if (bytes_written < 0) {
+        // Hier könnte man einen ROS_ERROR-Logger einbinden, 
+        // aber wir bleiben in der Library ROS-unabhängig
+        perror("SSC32 Serial Write Error");
+    }
 }
 
 // --- Phidgets Implementation ---

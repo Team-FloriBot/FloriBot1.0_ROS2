@@ -3,11 +3,11 @@
 HardwareNode::HardwareNode() : Node("hardware_node") {
     // Parameter deklarieren
     this->declare_parameter("serial_port", "/dev/ttyS1");
-    this->declare_parameter("left_enc_serial", 123456);
-    this->declare_parameter("right_enc_serial", 654321);
+    this->declare_parameter("left_enc_serial", 101902);
+    this->declare_parameter("right_enc_serial", 102191);
 
     // Hardware initialisieren
-    motor_driver_ = std::make_unique<SSC32Driver>(this->get_parameter("serial_port").as_string(), 115200);
+    motor_driver_ = std::make_unique<SSC32Driver>(this->get_parameter("serial_port").as_string(), 115200); // richtige Baudrate????
     enc_left_ = std::make_unique<PhidgetEncoderWrapper>(this->get_parameter("left_enc_serial").as_int());
     enc_right_ = std::make_unique<PhidgetEncoderWrapper>(this->get_parameter("right_enc_serial").as_int());
     
