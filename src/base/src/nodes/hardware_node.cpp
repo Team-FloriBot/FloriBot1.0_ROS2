@@ -116,7 +116,10 @@ void HardwareNode::control_loop()
     // --------------------------------------------------
     // Encoder in Rad umrechnen
     // --------------------------------------------------
-    constexpr double ticks_to_rad = (2.0 * M_PI) / 1440.0;
+    // 1440 Ticks pro Motorumdrehung * 20 (Getriebeübersetzung) = 28800 Ticks pro Radumdrehung
+    constexpr double gear_ratio = 20.0;
+    constexpr double ticks_per_rev = 1440.0 * gear_ratio; 
+    constexpr double ticks_to_rad = (2.0 * M_PI) / ticks_per_rev;
 
     double curr_pos_l = enc_left_->get_position() * ticks_to_rad;
     double curr_pos_r = enc_right_->get_position() * ticks_to_rad;
