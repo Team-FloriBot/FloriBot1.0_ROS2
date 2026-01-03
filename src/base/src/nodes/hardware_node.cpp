@@ -118,8 +118,8 @@ void HardwareNode::control_loop()
     // --------------------------------------------------
     constexpr double ticks_to_rad = (2.0 * M_PI) / 1440.0;
 
-    double curr_pos_l = -1.0 * enc_left_->get_position() * ticks_to_rad;
-    double curr_pos_r = -1.0 * enc_right_->get_position() * ticks_to_rad;
+    double curr_pos_l = enc_left_->get_position() * ticks_to_rad;
+    double curr_pos_r = enc_right_->get_position() * ticks_to_rad;
 
     double vel_l = (curr_pos_l - last_pos_l_) / dt;
     double vel_r = (curr_pos_r - last_pos_r_) / dt;
