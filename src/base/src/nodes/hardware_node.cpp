@@ -17,9 +17,9 @@ HardwareNode::HardwareNode()
     this->declare_parameter("left_enc_serial", 101902);
     this->declare_parameter("right_enc_serial", 102191);
 
-    this->declare_parameter("kp", 10.0);
-    this->declare_parameter("ki", 0.5);
-    this->declare_parameter("kd", 0.1);
+    this->declare_parameter("kp", 0.5);
+    this->declare_parameter("ki", 0.0);
+    this->declare_parameter("kd", 0.0);
 
     this->declare_parameter("max_wheel_speed", 10.0); // [rad/s]
 
