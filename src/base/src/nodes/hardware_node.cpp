@@ -10,31 +10,39 @@ using namespace std::chrono_literals;
 HardwareNode::HardwareNode()
 : Node("hardware_node")
 {
+    // --------------------------------------------------
+    // Parameter deklarieren
+    // --------------------------------------------------
     this->declare_parameter("serial_port", "/dev/ttyS1");
     this->declare_parameter("left_enc_serial", 101902);
     this->declare_parameter("right_enc_serial", 102191);
 
-    const std::string serial_port =
-        this->get_parameter("serial_port").as_string();
-    const int left_sn =
-        this->get_parameter("left_enc_serial").as_int();
-    const int right_sn =
-        this->get_parameter("right_enc_serial").as_int();
+    this->declare_parameter("kp", 10.0);
+    this->declare_parameter("ki", 0.5);
+    this->declare_parameter("kd", 0.1);
 
+    this->declare_parameter("max_wheel_speed", 10.0); // [rad/s]
+
+    const std::string serial_port = this->get_parameter("serial_port").as_string();
+    const int left_sn  = this->get_parameter("left_enc_serial").as_int();
+    const int right_sn = this->get_parameter("right_enc_serial").as_int();
+
+    max_wheel_speed_ = this->get_parameter("max_wheel_speed").as_double();
+
+    // --------------------------------------------------
+    // Hardware initialisieren
+    // --------------------------------------------------
     try {
-        motor_driver_ =
-            std::make_unique<SSC32Driver>(serial_port, 115200);
-
-        enc_left_  = std::make_unique<PhidgetEncoderWrapper>(left_sn);
-        enc_right_ = std::make_unique<PhidgetEncoderWrapper>(right_sn);
+        motor_driver_ = std::make_unique<SSC32Driver>(serial_port, 115200);
+        enc_left_     = std::make_unique<PhidgetEncoderWrapper>(left_sn);
+        enc_right_    = std::make_unique<PhidgetEncoderWrapper>(right_sn);
 
         RCLCPP_INFO(
             this->get_logger(),
             "Hardware initialisiert (SSC32 + Encoder %d / %d)",
             left_sn, right_sn
         );
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         RCLCPP_FATAL(
             this->get_logger(),
             "Hardware-Initialisierung fehlgeschlagen: %s",
@@ -43,9 +51,19 @@ HardwareNode::HardwareNode()
         throw;
     }
 
-    pid_left_  = std::make_unique<PIDController>(10.0, 0.5, 0.1);
-    pid_right_ = std::make_unique<PIDController>(10.0, 0.5, 0.1);
+    // --------------------------------------------------
+    // PID Controller initialisieren
+    // --------------------------------------------------
+    double kp = this->get_parameter("kp").as_double();
+    double ki = this->get_parameter("ki").as_double();
+    double kd = this->get_parameter("kd").as_double();
 
+    pid_left_  = std::make_unique<PIDController>(kp, ki, kd);
+    pid_right_ = std::make_unique<PIDController>(kp, ki, kd);
+
+    // --------------------------------------------------
+    // Subscriber / Publisher
+    // --------------------------------------------------
     sub_ = this->create_subscription<base::msg::WheelVelocities>(
         "/wheel_commands",
         10,
@@ -58,6 +76,11 @@ HardwareNode::HardwareNode()
     );
 
     last_time_ = this->now();
+    last_cmd_time_ = last_time_;
+
+    // --------------------------------------------------
+    // Timer für Regelung
+    // --------------------------------------------------
     timer_ = this->create_wall_timer(
         10ms,
         std::bind(&HardwareNode::control_loop, this)
@@ -70,6 +93,7 @@ void HardwareNode::command_callback(
     std::lock_guard<std::mutex> lock(mtx_);
     target_l_ = msg->left;
     target_r_ = msg->right;
+    last_cmd_time_ = this->now();
 }
 
 void HardwareNode::control_loop()
@@ -85,42 +109,74 @@ void HardwareNode::control_loop()
     }
 
     const rclcpp::Time now = this->now();
-    const double dt = (now - last_time_).seconds();
+    double dt = (now - last_time_).seconds();
+    if (dt <= 0.0) return;
     last_time_ = now;
 
-    if (dt <= 0.0) return;
+    // --------------------------------------------------
+    // Encoder in Rad umrechnen
+    // --------------------------------------------------
+    constexpr double ticks_to_rad = (2.0 * M_PI) / 1440.0;
 
-    constexpr double ticks_to_rad =
-        (2.0 * M_PI) / 1440.0;
+    double curr_pos_l = enc_left_->get_position() * ticks_to_rad;
+    double curr_pos_r = enc_right_->get_position() * ticks_to_rad;
 
-    const double curr_pos_l =
-        enc_left_->get_position() * ticks_to_rad;
-    const double curr_pos_r =
-        enc_right_->get_position() * ticks_to_rad;
+    double vel_l = (curr_pos_l - last_pos_l_) / dt;
+    double vel_r = (curr_pos_r - last_pos_r_) / dt;
 
-    const double vel_l =
-        (curr_pos_l - last_pos_l_) / dt;
-    const double vel_r =
-        (curr_pos_r - last_pos_r_) / dt;
-
-    double target_l;
-    double target_r;
+    // --------------------------------------------------
+    // Zielwerte aus Mutex kopieren
+    // --------------------------------------------------
+    double target_l, target_r;
     {
         std::lock_guard<std::mutex> lock(mtx_);
         target_l = target_l_;
         target_r = target_r_;
     }
 
-    const double out_l =
-        pid_left_->compute(target_l, vel_l, dt);
-    const double out_r =
-        pid_right_->compute(target_r, vel_r, dt);
+    // --------------------------------------------------
+    // Watchdog / PID Reset
+    // --------------------------------------------------
+    if ((now - last_cmd_time_).seconds() > 0.2) {
+        pid_left_->reset();
+        pid_right_->reset();
+        target_l = 0.0;
+        target_r = 0.0;
+    }
 
-    const int pwm_left  = 1500 + static_cast<int>(out_l * 500.0);
-    const int pwm_right = 1500 + static_cast<int>(out_r * 500.0);
+    // --------------------------------------------------
+    // Normierung auf [-1, 1] für PID
+    // --------------------------------------------------
+    auto clamp = [](double v) { return std::max(-1.0, std::min(1.0, v)); };
+
+    double target_l_norm = clamp(target_l / max_wheel_speed_);
+    double target_r_norm = clamp(target_r / max_wheel_speed_);
+    double vel_l_norm    = clamp(vel_l / max_wheel_speed_);
+    double vel_r_norm    = clamp(vel_r / max_wheel_speed_);
+
+    // --------------------------------------------------
+    // PID Berechnung
+    // --------------------------------------------------
+    double out_l = pid_left_->compute(target_l_norm, vel_l_norm, dt);
+    double out_r = pid_right_->compute(target_r_norm, vel_r_norm, dt);
+
+    // --------------------------------------------------
+    // PWM mit Deadzone
+    // --------------------------------------------------
+    auto pwm_from_u = [](double u) -> int {
+        if (std::abs(u) < 0.05)
+            return 1500;
+        return 1500 + static_cast<int>(u * 500.0);
+    };
+
+    int pwm_left  = pwm_from_u(out_l);
+    int pwm_right = pwm_from_u(out_r);
 
     motor_driver_->send_commands(pwm_left, pwm_right);
 
+    // --------------------------------------------------
+    // JointState publizieren
+    // --------------------------------------------------
     sensor_msgs::msg::JointState state;
     state.header.stamp = now;
     state.name = {"left_wheel", "right_wheel"};
@@ -129,10 +185,12 @@ void HardwareNode::control_loop()
 
     pub_->publish(state);
 
+    // --------------------------------------------------
+    // letzte Position speichern
+    // --------------------------------------------------
     last_pos_l_ = curr_pos_l;
     last_pos_r_ = curr_pos_r;
 }
-
 
 int main(int argc, char **argv)
 {
@@ -141,5 +199,3 @@ int main(int argc, char **argv)
     rclcpp::shutdown();
     return 0;
 }
-
-

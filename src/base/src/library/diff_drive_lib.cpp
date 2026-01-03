@@ -8,28 +8,83 @@
 #include <iostream>
 #include <cerrno>
 #include <cstring>
+#include <algorithm>
+#include <cmath>
 
 // ======================================================
 // PID Controller
 // ======================================================
 
-PIDController::PIDController(double kp, double ki, double kd)
-: kp_(kp), ki_(ki), kd_(kd) {}
+PIDController::PIDController(
+    double kp,
+    double ki,
+    double kd,
+    double output_limit,
+    double deadband
+)
+: kp_(kp),
+  ki_(ki),
+  kd_(kd),
+  out_lim_(std::abs(output_limit)),
+  deadband_(std::abs(deadband))
+{
+}
+
+void PIDController::reset()
+{
+    integral_ = 0.0;
+    last_measured_ = 0.0;
+    last_output_ = 0.0;
+    first_run_ = true;
+}
 
 double PIDController::compute(double setpoint, double measured, double dt)
 {
+    if (dt <= 0.0) {
+        return last_output_;
+    }
+
+    // Fehler
     const double error = setpoint - measured;
+
+    // Deadband um 0
+    if (std::abs(error) < deadband_) {
+        last_output_ = 0.0;
+        return 0.0;
+    }
+
+    // D-Anteil auf Messwert (rauschärmer)
+    double derivative = 0.0;
+    if (!first_run_) {
+        derivative = -(measured - last_measured_) / dt;
+    }
+
+    // Integrator (vorläufig)
     integral_ += error * dt;
 
-    const double derivative = (dt > 0.0)
-        ? (error - last_error_) / dt
-        : 0.0;
+    // PID-Rohwert
+    double output =
+        kp_ * error +
+        ki_ * integral_ +
+        kd_ * derivative;
 
-    last_error_ = error;
+    // Sättigung + Anti-Windup (Integrator-Clamping)
+    if (output > out_lim_) {
+        output = out_lim_;
+        integral_ -= error * dt;
+    }
+    else if (output < -out_lim_) {
+        output = -out_lim_;
+        integral_ -= error * dt;
+    }
 
-    return kp_ * error + ki_ * integral_ + kd_ * derivative;
+    // Zustand aktualisieren
+    last_measured_ = measured;
+    last_output_   = output;
+    first_run_     = false;
+
+    return output;
 }
-
 // ======================================================
 // SSC-32 Driver
 // ======================================================

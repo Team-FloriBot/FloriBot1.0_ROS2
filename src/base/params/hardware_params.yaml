@@ -5,7 +5,11 @@ hardware_node:
     right_enc_serial: 102191
     wheel_radius: 0.05
     ticks_per_rev: 1440.0
+
     # PID Parameter
-    kp: 12.0
-    ki: 0.8
+    kp: 10.0
+    ki: 0.5
     kd: 0.1
+
+    # Neue Parameter für HardwareNode
+    max_wheel_speed: 1.0  # [rad/s] maximale Radgeschwindigkeit

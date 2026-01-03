@@ -7,12 +7,34 @@
 
 class PIDController {
 public:
-    PIDController(double kp, double ki, double kd);
+    PIDController(
+        double kp,
+        double ki,
+        double kd,
+        double output_limit = 1.0,
+        double deadband = 0.05
+    );
+
+    /// Reset interner Zustände (Integrator, Historie)
+    void reset();
+
+    /// Berechnet normierte Stellgröße [-output_limit .. +output_limit]
     double compute(double setpoint, double measured, double dt);
+
 private:
-    double kp_, ki_, kd_;
+    // Parameter
+    double kp_;
+    double ki_;
+    double kd_;
+
+    double out_lim_;
+    double deadband_;
+
+    // Zustände
     double integral_ = 0.0;
-    double last_error_ = 0.0;
+    double last_measured_ = 0.0;
+    double last_output_ = 0.0;
+    bool first_run_ = true;
 };
 
 class SSC32Driver {

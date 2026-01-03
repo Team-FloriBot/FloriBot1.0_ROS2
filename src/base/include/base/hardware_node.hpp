@@ -15,8 +15,10 @@ public:
     HardwareNode();
 
 private:
-    void command_callback(
-        const base::msg::WheelVelocities::SharedPtr msg);
+    // Callback für eingehende Wheel-Commands
+    void command_callback(const base::msg::WheelVelocities::SharedPtr msg);
+
+    // Hauptregel-Loop (Timer)
     void control_loop();
 
     // ROS
@@ -29,19 +31,27 @@ private:
     std::unique_ptr<PhidgetEncoderWrapper> enc_left_;
     std::unique_ptr<PhidgetEncoderWrapper> enc_right_;
 
-    // Regler
+    // PID-Regler
     std::unique_ptr<PIDController> pid_left_;
     std::unique_ptr<PIDController> pid_right_;
 
-    // State
+    // Zielgeschwindigkeiten
     double target_l_{0.0};
     double target_r_{0.0};
+
+    // Letzte Positionen (für Geschwindigkeitsermittlung)
     double last_pos_l_{0.0};
     double last_pos_r_{0.0};
 
+    // Zeitstempel
     rclcpp::Time last_time_;
+    rclcpp::Time last_cmd_time_;  // <--- hinzugefügt
+
+    // Sicherheitsparameter
+    double max_wheel_speed_{1.0}; // <--- hinzugefügt, kann über Parameter gesetzt werden
+
+    // Thread-Sicherheit
     std::mutex mtx_;
 };
 
 #endif  // HARDWARE_NODE_HPP
-
