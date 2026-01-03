@@ -163,14 +163,11 @@ void HardwareNode::control_loop()
     // --------------------------------------------------
     // PWM mit Deadzone
     // --------------------------------------------------
-    auto pwm_from_u = [](double u) -> int {
-        if (std::abs(u) < 0.05)
-            return 1500;
-        return 1500 + static_cast<int>(u * 500.0);
-    };
+    auto pwm_left_calc  = [](double u) { return 1500 - static_cast<int>(u * 500.0); };
+    auto pwm_right_calc = [](double u) { return 1500 + static_cast<int>(u * 500.0); };
 
-    int pwm_left  = pwm_from_u(out_l);
-    int pwm_right = pwm_from_u(out_r);
+    int pwm_left  = pwm_left_calc(std::clamp(out_l, -1.0, 1.0));
+    int pwm_right = pwm_right_calc(std::clamp(out_r, -1.0, 1.0));
 
     motor_driver_->send_commands(pwm_left, pwm_right);
 
