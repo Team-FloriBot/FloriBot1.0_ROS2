@@ -31,6 +31,11 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
+    //Für Schlupf-Kompensation
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_lidar_odom_;
+    RobotTwist latest_actual_twist_;
+    rclcpp::Time last_lidar_update_;
+
     // Logic
     std::unique_ptr<KinematicsCalculator> kinematics_;
     
