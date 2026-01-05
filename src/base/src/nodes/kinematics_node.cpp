@@ -10,6 +10,7 @@ KinematicsNode::KinematicsNode() : Node("kinematics_node") {
     // Parameters
     this->declare_parameter("wheel_separation", 0.5);
     this->declare_parameter("wheel_radius", 0.1);
+    this->declare_parameter("use_slip_compensation", true); // Neu: Ein/Ausschaltbar
 
     double wheel_sep = this->get_parameter("wheel_separation").as_double();
     double wheel_rad = this->get_parameter("wheel_radius").as_double();
@@ -18,26 +19,51 @@ KinematicsNode::KinematicsNode() : Node("kinematics_node") {
     kinematics_ = std::make_unique<KinematicsCalculator>(wheel_sep, wheel_rad);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
-    // Setup Pub/Sub
+    // --- Setup Pub/Sub ---
     sub_cmd_vel_ = this->create_subscription<geometry_msgs::msg::Twist>(
         "/cmd_vel", 10, std::bind(&KinematicsNode::cmdVelCallback, this, _1));
 
     sub_wheel_states_ = this->create_subscription<sensor_msgs::msg::JointState>(
-    "/wheel_states", 10, std::bind(&KinematicsNode::wheelStateCallback, this, _1));
+        "/wheel_states", 10, std::bind(&KinematicsNode::wheelStateCallback, this, _1));
+
+    // NEU: Abo für LiDAR-Odometrie (z.B. von rf2o oder slam_toolbox)
+    sub_lidar_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        "/odom_lidar", 10, [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
+            latest_actual_twist_.linear_x = msg->twist.twist.linear.x;
+            latest_actual_twist_.angular_z = msg->twist.twist.angular.z;
+            last_lidar_update_ = this->now();
+        });
 
     pub_wheel_cmd_ = this->create_publisher<base::msg::WheelVelocities>("/wheel_commands", 10);
     pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
 
     last_odom_time_ = this->now();
+    last_lidar_update_ = this->now();
     
-    RCLCPP_INFO(this->get_logger(), "Kinematics Node Initialized. Sep: %.2f, Rad: %.2f", wheel_sep, wheel_rad);
+    RCLCPP_INFO(this->get_logger(), "Kinematics Node mit Schlupfkompensation bereit.");
 }
 
 void KinematicsNode::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg) {
-    // 1. Calculate target wheel speeds
-    WheelSpeedSet speeds = kinematics_->calculateWheelSpeeds(msg->linear.x, msg->angular.z);
+    // Überprüfung: Sind LiDAR-Daten aktuell? (Timeout 0.5s)
+    bool lidar_valid = (this->now() - last_lidar_update_).seconds() < 0.5;
+    
+    RobotTwist feedback_twist;
+    if (lidar_valid && this->get_parameter("use_slip_compensation").as_bool()) {
+        feedback_twist = latest_actual_twist_;
+    } else {
+        // Falls kein LiDAR da ist, nehmen wir an: Ist = Soll (keine Kompensation)
+        feedback_twist.linear_x = msg->linear.x;
+        feedback_twist.angular_z = msg->angular.z;
+    }
 
-    // 2. Publish
+    // 1. Berechne korrigierte Radgeschwindigkeiten (mit LiDAR-Feedback)
+    WheelSpeedSet speeds = kinematics_->calculateWheelSpeeds(
+        msg->linear.x, 
+        msg->angular.z, 
+        feedback_twist
+    );
+
+    // 2. Publish an Hardware
     base::msg::WheelVelocities out_msg;
     out_msg.left = speeds.left;
     out_msg.right = speeds.right;
