@@ -28,8 +28,10 @@ WheelSpeedSet KinematicsCalculator::calculateWheelSpeeds(
     double v_right_act = actual_twist.linear_x + (actual_twist.angular_z * wheel_sep_ / 2.0);
 
     // Längsschlupf-Kompensationsterm v_S: Differenz zwischen Soll und Ist
-    double v_s_left = v_left_d - v_left_act;
-    double v_s_right = v_right_d - v_right_act;
+    double k_slip = 0.7; // Schlupf wird nicht vollständig kompoensiert
+    // bei vollständiger Kompensation kann es passieren, dass das Fahrverhalten zu nervös wird
+    double v_s_left = (v_left_d - v_left_act) * k_slip;
+    double v_s_right = (v_right_d - v_right_act) * k_slip;
 
     // 3. Korrigierte Winkelgeschwindigkeit berechnen
     // Formel aus PDF: omega_corrected = (v_desired + v_slip) / radius
