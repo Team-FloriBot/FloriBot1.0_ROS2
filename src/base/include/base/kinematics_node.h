@@ -33,8 +33,8 @@ private:
 
     //Für Schlupf-Kompensation
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_lidar_odom_;
-    RobotTwist latest_actual_twist_;
-    rclcpp::Time last_lidar_update_;
+    base::RobotTwist latest_actual_twist_; // Speichert die reale Geschw. vom LiDAR
+    rclcpp::Time last_lidar_update_;       // Für den Sicherheits-Timeout
 
     // Logic
     std::unique_ptr<KinematicsCalculator> kinematics_;
